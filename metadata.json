@@ -1,0 +1,5 @@
+{
+  "name": "Organization_Management",
+  "description": "A web application to manage job structures with a drag-and-drop interface, allowing users to organize roles between current and available categories.",
+  "requestFramePermissions": []
+}
