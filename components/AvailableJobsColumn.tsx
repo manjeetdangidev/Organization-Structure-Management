@@ -1,10 +1,9 @@
-
-
 import React from 'react';
 import { useDroppable } from '@dnd-kit/core';
 import { StructureItem as StructureItemType } from '../types';
 import TreeItem from './TreeItem';
-import { Search } from 'lucide-react';
+import { Search, ChevronsRight } from 'lucide-react';
+import { Features } from '../App';
 
 interface AvailableJobsColumnProps {
   items: StructureItemType[];
@@ -18,15 +17,26 @@ interface AvailableJobsColumnProps {
   onContextMenu: (event: React.MouseEvent, itemId: string) => void;
   searchQuery: string;
   onSearchChange: (query: string) => void;
+  itemCount: number;
+  features: Features;
+  onToggleVisibility: () => void;
 }
 
-const AvailableJobsColumn: React.FC<AvailableJobsColumnProps> = ({ items, selectedItemIds, onSelect, onCreateCustomJob, editingItemId, onStartEditing, onNameChange, onDeleteItem, onContextMenu, searchQuery, onSearchChange }) => {
+const AvailableJobsColumn: React.FC<AvailableJobsColumnProps> = ({ items, selectedItemIds, onSelect, onCreateCustomJob, editingItemId, onStartEditing, onNameChange, onDeleteItem, onContextMenu, searchQuery, onSearchChange, itemCount, features, onToggleVisibility }) => {
   const { setNodeRef } = useDroppable({ id: 'available-jobs-droppable' });
   
   return (
     <div className="bg-white p-4 rounded-lg border border-gray-200 shadow-sm flex flex-col h-[75vh]">
       <div className="mb-4 flex-shrink-0">
-        <h2 className="text-lg font-semibold text-cyan-800">Available Job Roles</h2>
+        <div className="flex justify-between items-center">
+            <h2 className="text-lg font-semibold text-cyan-800">Available Job Roles</h2>
+            <div className="flex items-center gap-2">
+                <span className="text-sm font-normal text-gray-500">Total: {itemCount}</span>
+                <button onClick={onToggleVisibility} title="Hide Panel" className="p-1 text-gray-500 hover:text-gray-700 rounded-full hover:bg-gray-200">
+                    <ChevronsRight size={20} />
+                </button>
+            </div>
+        </div>
         <p className="text-sm text-gray-500 mt-1">Unassigned jobs. Select a job, then a department to move it.</p>
         <div className="relative mt-3">
             <Search size={16} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
@@ -56,6 +66,9 @@ const AvailableJobsColumn: React.FC<AvailableJobsColumnProps> = ({ items, select
               onToggleExpand={() => {}}
               onContextMenu={onContextMenu}
               onDeleteItem={onDeleteItem}
+              features={features}
+              showManualOrder={false}
+              onSortChildren={() => {}}
             />
           ))
         ) : (

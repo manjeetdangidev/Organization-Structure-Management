@@ -2,7 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { PlusCircle, Edit, Trash2, Globe, Landmark, Home, Map, ChevronRight } from 'lucide-react';
 import { DndContext, useDraggable, useDroppable, DragEndEvent, DragStartEvent, DragOverlay, closestCenter, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
 import { CSS } from '@dnd-kit/utilities';
-import Modal from './Modal';
+import Modal from '../Modal';
 import { LocationDataType, LocationData, UnassignedLocationNode, LocationType, Country, State, District } from '../types';
 
 interface LocationTabProps {

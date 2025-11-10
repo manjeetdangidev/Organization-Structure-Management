@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useDraggable, useDroppable } from '@dnd-kit/core';
 import { CSS } from '@dnd-kit/utilities';
-import { StructureItem as StructureItemType } from '../types';
-import { Folder, ClipboardList, Circle, ChevronLeft, ArrowUp, ArrowDown, Trash2 } from 'lucide-react';
+import { StructureItem as StructureItemType, ItemType } from '../types';
+import { Folder, ClipboardList, Circle, ChevronLeft, ArrowUp, ArrowDown, X, PlusCircle, ArrowDownAZ, ArrowUpZA } from 'lucide-react';
+import { Features } from '../App';
 
 interface TreeItemProps {
   item: StructureItemType;
@@ -15,6 +16,7 @@ interface TreeItemProps {
   onStartEditing: (id: string | null) => void;
   onNameChange: (id: string, newName: string) => void;
   onMoveToPosition?: (id: string, position: string) => void;
+  onSwapItems?: (id: string, position: string) => void;
   onMoveItems?: (direction: 'up' | 'down') => void;
   isExpanded: boolean;
   expandedIds: Set<string>;
@@ -22,18 +24,30 @@ interface TreeItemProps {
   onContextMenu: (event: React.MouseEvent, itemId: string) => void;
   onDeleteItem: (id: string) => void;
   justMovedItemIds?: Set<string>;
+  features: Features;
+  onOpenAddItemModal?: (type: ItemType, parentId: string) => void;
+  manualOrder?: Record<string, string>;
+  onManualOrderChange?: (id: string, value: string) => void;
+  showManualOrder: boolean;
+  onSortChildren: (parentId: string, direction: 'asc' | 'desc') => void;
 }
 
 const TreeItem: React.FC<TreeItemProps> = (props) => {
   const { 
     item, depth = 0, position, selectedItemIds, onSelect, isOverlay = false, 
-    editingItemId, onStartEditing, onNameChange, onMoveItems, onMoveToPosition,
+    editingItemId, onStartEditing, onNameChange, onMoveItems, onMoveToPosition, onSwapItems,
     isExpanded, expandedIds, onToggleExpand, onContextMenu, onDeleteItem,
-    justMovedItemIds
+    justMovedItemIds, features, onOpenAddItemModal, manualOrder, onManualOrderChange,
+    showManualOrder, onSortChildren
   } = props;
   
   const [posValue, setPosValue] = useState(position);
+  const [isSwap, setIsSwap] = useState(false);
   const isSelected = selectedItemIds.includes(item.id);
+  
+  useEffect(() => {
+    setPosValue(position);
+  }, [position]);
 
   const {
     attributes,
@@ -43,7 +57,7 @@ const TreeItem: React.FC<TreeItemProps> = (props) => {
     isDragging,
   } = useDraggable({ 
       id: item.id,
-      disabled: !!editingItemId
+      disabled: !!editingItemId || !features.dragAndDrop
   });
 
   const { setNodeRef: setDroppableNodeRef, isOver } = useDroppable({ id: item.id });
@@ -63,6 +77,34 @@ const TreeItem: React.FC<TreeItemProps> = (props) => {
   const hasChildren = item.children && item.children.length > 0;
   const isEditing = item.id === editingItemId;
 
+  const childCounts = useMemo(() => {
+    if (!item.children || item.children.length === 0) {
+      return null;
+    }
+
+    if (item.type === 'Division') {
+      let departmentCount = 0;
+      let jobCount = 0;
+      item.children.forEach(dept => {
+        if (dept.type === 'Department') {
+          departmentCount++;
+          jobCount += dept.children?.filter(job => job.type === 'Job').length || 0;
+        }
+      });
+      if (departmentCount === 0 && jobCount === 0) return null;
+      return { departments: departmentCount, jobs: jobCount };
+    }
+
+    if (item.type === 'Department') {
+      const jobCount = item.children.filter(job => job.type === 'Job').length;
+      if (jobCount === 0) return null;
+      return { jobs: jobCount };
+    }
+
+    return null;
+  }, [item]);
+
+
   const handleToggleExpand = (e: React.MouseEvent) => {
     e.stopPropagation();
     onToggleExpand(item.id);
@@ -76,7 +118,9 @@ const TreeItem: React.FC<TreeItemProps> = (props) => {
   };
 
   const handleDoubleClick = () => {
-    onStartEditing(item.id);
+    if (features.inlineEditing) {
+      onStartEditing(item.id);
+    }
   }
 
   const handleInputBlur = (e: React.FocusEvent<HTMLInputElement>) => {
@@ -89,6 +133,14 @@ const TreeItem: React.FC<TreeItemProps> = (props) => {
     } else if (e.key === 'Escape') {
       onStartEditing(null);
     }
+  };
+  
+  const handlePositionAction = (targetPosition: string) => {
+      if (isSwap) {
+          onSwapItems?.(item.id, targetPosition);
+      } else {
+          onMoveToPosition?.(item.id, targetPosition);
+      }
   };
 
   const TypeIcon = () => {
@@ -109,6 +161,7 @@ const TreeItem: React.FC<TreeItemProps> = (props) => {
       <div
         ref={setNodeRef}
         style={style}
+        data-id={item.id}
         className={`flex items-center justify-between rounded-md text-sm group transition-all duration-500 relative ${
           isSelected ? 'bg-cyan-100' : 'hover:bg-gray-100'
         } ${isOver && !isDragging ? 'outline outline-2 outline-cyan-500' : ''} ${
@@ -116,9 +169,19 @@ const TreeItem: React.FC<TreeItemProps> = (props) => {
         }`}
         onClick={handleSelect}
         onDoubleClick={handleDoubleClick}
-        onContextMenu={(e) => onContextMenu(e, item.id)}
+        onContextMenu={(e) => { if (features.contextMenu) onContextMenu(e, item.id) }}
       >
         <div className="flex items-center flex-grow p-2 cursor-grab min-w-0" {...attributes} {...listeners}>
+            {showManualOrder && features.manualOrdering && manualOrder && onManualOrderChange && (
+              <input 
+                  type="text" 
+                  value={manualOrder[item.id] || ''}
+                  onChange={e => onManualOrderChange(item.id, e.target.value)}
+                  onClick={e => e.stopPropagation()}
+                  className="w-10 text-xs text-center mr-1 bg-gray-50 border border-gray-200 rounded-sm group-hover:bg-white"
+                  title="Manual order"
+              />
+            )}
           <span className="flex items-center justify-center text-gray-400 w-5 h-5 flex-shrink-0">
             {hasChildren ? (
               <button onClick={handleToggleExpand} className="p-0.5 rounded hover:bg-gray-200">
@@ -144,37 +207,60 @@ const TreeItem: React.FC<TreeItemProps> = (props) => {
           ) : (
             <div className="flex items-center min-w-0">
                 <span className={`truncate ${nameClass}`}>{item.name}</span>
-                 <button onClick={(e) => { e.stopPropagation(); onDeleteItem(item.id); }} title="Delete Item" className="ml-2 p-1 rounded-full text-gray-400 hover:text-red-600 hover:bg-red-100 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
-                    <Trash2 size={14} />
+                {(item.type === 'Division' || item.type === 'Department') && hasChildren && features.childSorting && (
+                    <div className="flex items-center opacity-0 group-hover:opacity-100 transition-opacity ml-2">
+                        <button onClick={(e) => { e.stopPropagation(); onSortChildren(item.id, 'asc'); }} title="Sort children A-Z" className="p-1 rounded-full text-gray-400 hover:text-cyan-600 hover:bg-cyan-100"><ArrowDownAZ size={14} /></button>
+                        <button onClick={(e) => { e.stopPropagation(); onSortChildren(item.id, 'desc'); }} title="Sort children Z-A" className="p-1 rounded-full text-gray-400 hover:text-cyan-600 hover:bg-cyan-100"><ArrowUpZA size={14} /></button>
+                    </div>
+                )}
+                {(item.type === 'Division' || item.type === 'Department') && onOpenAddItemModal && (
+                     <button onClick={(e) => { e.stopPropagation(); onOpenAddItemModal(item.type === 'Division' ? 'Department' : 'Job', item.id); }} title={`Add ${item.type === 'Division' ? 'Department' : 'Job'}`} className="ml-1 p-1 rounded-full text-gray-400 hover:text-cyan-600 hover:bg-cyan-100 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
+                        <PlusCircle size={16} />
+                    </button>
+                )}
+                 <button onClick={(e) => { e.stopPropagation(); onDeleteItem(item.id); }} title="Delete Item" className="ml-1 p-1 rounded-full text-gray-400 hover:text-red-600 hover:bg-red-100 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
+                    <X size={16} />
                 </button>
             </div>
           )}
         </div>
 
-        <div className="flex-shrink-0 pr-2 flex items-center gap-1">
-            {isSelected && !isEditing && selectedItemIds.length === 1 && onMoveItems && onMoveToPosition && (
-                <div className="flex items-center gap-1 bg-gray-200/50 rounded-md p-0.5">
+        <div className="flex-shrink-0 pr-2 flex items-center gap-3">
+            {isSelected && !isEditing && selectedItemIds.length === 1 && onMoveItems && onMoveToPosition && onSwapItems && features.inlineMoveControls && (
+                <div className="flex items-center gap-2 bg-gray-200/50 rounded-md p-0.5">
                     <button onClick={(e) => { e.stopPropagation(); onMoveItems('up'); }} title="Move Up" className="p-1 rounded text-gray-500 hover:text-gray-800 hover:bg-gray-200">
                         <ArrowUp size={16} />
                     </button>
                      <button onClick={(e) => { e.stopPropagation(); onMoveItems('down'); }} title="Move Down" className="p-1 rounded text-gray-500 hover:text-gray-800 hover:bg-gray-200">
                         <ArrowDown size={16} />
                     </button>
-                     <div className="flex items-center">
+                     <div className="flex items-center gap-2">
                         <span className="text-xs text-gray-500 font-medium px-1">Move to</span>
                         <input 
                             type="text"
                             value={posValue}
                             onChange={(e) => setPosValue(e.target.value)}
-                            onBlur={() => setPosValue(position)}
-                            onKeyDown={(e) => { if(e.key === 'Enter') onMoveToPosition(item.id, e.currentTarget.value) }}
+                            onKeyDown={(e) => { if(e.key === 'Enter') handlePositionAction(e.currentTarget.value) }}
                             onClick={(e) => e.stopPropagation()}
                             className="w-16 text-xs text-center bg-white border border-gray-300 rounded-sm"
                         />
+                        <label className="flex items-center gap-1 text-xs text-gray-600 cursor-pointer">
+                            <input type="checkbox" checked={isSwap} onChange={e => setIsSwap(e.target.checked)} onClick={e => e.stopPropagation()} className="w-3.5 h-3.5 rounded border-gray-300 text-cyan-600 focus:ring-cyan-500" />
+                            Swap
+                        </label>
                      </div>
                 </div>
             )}
-            <span className="text-xs text-gray-400 font-semibold uppercase tracking-wider w-20 text-right">{item.type}</span>
+             <div className="flex items-baseline w-56 justify-end">
+                <span className="text-xs text-gray-400 font-semibold uppercase tracking-wider text-right whitespace-nowrap shrink-0">
+                    {item.type}
+                </span>
+                {features.layerCounts && childCounts && (
+                    <span className="font-normal normal-case text-gray-500 ml-2 text-left whitespace-nowrap w-[140px]">
+                        ({childCounts.departments !== undefined ? `Dept: ${childCounts.departments}, Job: ${childCounts.jobs}` : `Job: ${childCounts.jobs}`})
+                    </span>
+                )}
+            </div>
         </div>
       </div>
       {hasChildren && isExpanded && (
